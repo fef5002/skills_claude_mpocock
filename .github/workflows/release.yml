@@ -101,6 +101,7 @@ jobs:
           )"
 
           missing_release_tags=0
+          missing_release_tag_args=()
           while IFS= read -r release_tag; do
             if [ -z "${release_tag}" ]; then
               continue
@@ -108,6 +109,7 @@ jobs:
 
             if ! git ls-remote --exit-code --tags origin "refs/tags/${release_tag}" >/dev/null 2>&1; then
               missing_release_tags=1
+              missing_release_tag_args+=("refs/tags/${release_tag}")
               echo "Missing release tag ${release_tag}"
             fi
           done <<< "${release_tags}"
@@ -118,4 +120,4 @@ jobs:
           fi
 
           npx changeset tag
-          git push origin --tags
+          git push origin "${missing_release_tag_args[@]}"

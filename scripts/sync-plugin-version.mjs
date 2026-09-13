@@ -22,12 +22,70 @@ if (pluginJson.version !== packageJson.version) {
 }
 
 function compareVersions(left, right) {
-  const leftParts = left.split(".").map(Number);
-  const rightParts = right.split(".").map(Number);
-  const length = Math.max(leftParts.length, rightParts.length);
+  const leftVersion = parseVersion(left);
+  const rightVersion = parseVersion(right);
 
-  for (let index = 0; index < length; index += 1) {
-    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+  for (let index = 0; index < leftVersion.core.length; index += 1) {
+    const difference = leftVersion.core[index] - rightVersion.core[index];
+
+    if (difference !== 0) {
+      return difference;
+    }
+  }
+
+  if (leftVersion.prerelease.length === 0 && rightVersion.prerelease.length === 0) {
+    return 0;
+  }
+
+  if (leftVersion.prerelease.length === 0) {
+    return 1;
+  }
+
+  if (rightVersion.prerelease.length === 0) {
+    return -1;
+  }
+
+  const prereleaseLength = Math.max(
+    leftVersion.prerelease.length,
+    rightVersion.prerelease.length,
+  );
+
+  for (let index = 0; index < prereleaseLength; index += 1) {
+    const leftPart = leftVersion.prerelease[index];
+    const rightPart = rightVersion.prerelease[index];
+
+    if (leftPart === undefined) {
+      return -1;
+    }
+
+    if (rightPart === undefined) {
+      return 1;
+    }
+
+    const leftNumber = Number(leftPart);
+    const rightNumber = Number(rightPart);
+    const leftIsNumber = String(leftNumber) === leftPart;
+    const rightIsNumber = String(rightNumber) === rightPart;
+
+    if (leftIsNumber && rightIsNumber) {
+      const difference = leftNumber - rightNumber;
+
+      if (difference !== 0) {
+        return difference;
+      }
+
+      continue;
+    }
+
+    if (leftIsNumber) {
+      return -1;
+    }
+
+    if (rightIsNumber) {
+      return 1;
+    }
+
+    const difference = leftPart.localeCompare(rightPart);
 
     if (difference !== 0) {
       return difference;
@@ -35,4 +93,19 @@ function compareVersions(left, right) {
   }
 
   return 0;
+}
+
+function parseVersion(version) {
+  const match = version.match(
+    /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/,
+  );
+
+  if (!match) {
+    throw new Error(`Unsupported semver version: ${version}`);
+  }
+
+  return {
+    core: match.slice(1, 4).map(Number),
+    prerelease: match[4] ? match[4].split(".") : [],
+  };
 }
