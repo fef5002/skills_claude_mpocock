@@ -38,12 +38,11 @@ jobs:
           if find .changeset -maxdepth 1 -name "*.md" ! -name "README.md" -print -quit | grep -q .; then
             if git fetch origin changeset-release/main:refs/remotes/origin/changeset-release/main 2>/dev/null; then
               release_branch_sha="$(git rev-parse refs/remotes/origin/changeset-release/main)"
-              git checkout -B changeset-release/main refs/remotes/origin/changeset-release/main
-              git merge --no-edit "${GITHUB_SHA}"
             else
               release_branch_sha=""
-              git checkout -B changeset-release/main
             fi
+
+            git checkout -B changeset-release/main "${GITHUB_SHA}"
 
             npm run version
 

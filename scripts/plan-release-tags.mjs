@@ -102,6 +102,14 @@ export function listMissingReleaseTags(
       return [];
     }
 
+    if (remoteTag.status !== 2) {
+      throw new Error(
+        remoteTag.stderr.trim() ||
+          remoteTag.stdout.trim() ||
+          `git ls-remote failed for refs/tags/${pkg.tag}`,
+      );
+    }
+
     return [
       {
         ...pkg,

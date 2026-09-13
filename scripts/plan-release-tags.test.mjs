@@ -4,14 +4,21 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { collectReleasePackages, findReleaseCommit } from "./plan-release-tags.mjs";
+import {
+  collectReleasePackages,
+  findReleaseCommit,
+  listMissingReleaseTags,
+} from "./plan-release-tags.mjs";
 
 async function createRepoFixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), "plan-release-tags-"));
+  const remote = await mkdtemp(path.join(os.tmpdir(), "plan-release-tags-remote-"));
   await mkdir(path.join(root, ".claude-plugin"), { recursive: true });
+  runGit(["init", "--bare", remote], process.cwd());
   runGit(["init"], root);
   runGit(["config", "user.name", "Test User"], root);
   runGit(["config", "user.email", "test@example.com"], root);
+  runGit(["remote", "add", "origin", remote], root);
 
   await writeFile(
     path.join(root, "package.json"),
@@ -19,6 +26,7 @@ async function createRepoFixture() {
   );
   runGit(["add", "package.json"], root);
   runGit(["commit", "-m", "initial version"], root);
+  runGit(["push", "-u", "origin", "HEAD:main"], root);
   const initialCommit = runGit(["rev-parse", "HEAD"], root).stdout.trim();
 
   await writeFile(
@@ -29,7 +37,7 @@ async function createRepoFixture() {
   runGit(["commit", "-m", "release 1.1.0"], root);
   const releaseCommit = runGit(["rev-parse", "HEAD"], root).stdout.trim();
 
-  return { root, initialCommit, releaseCommit };
+  return { root, remote, initialCommit, releaseCommit };
 }
 
 test("collectReleasePackages finds package manifests and tags", async () => {
@@ -81,6 +89,37 @@ test("findReleaseCommit returns the commit that introduced the current version",
 
   assert.notEqual(initialCommit, releaseCommit);
   assert.equal(findReleaseCommit("package.json", "1.1.0", root), releaseCommit);
+});
+
+test("listMissingReleaseTags returns tags that are not yet on the remote", async () => {
+  const { root, releaseCommit } = await createRepoFixture();
+
+  assert.deepEqual(listMissingReleaseTags(root), [
+    {
+      tag: "demo-pkg@1.1.0",
+      packageJsonPath: "package.json",
+      version: "1.1.0",
+      releaseCommit,
+    },
+  ]);
+});
+
+test("listMissingReleaseTags filters tags that already exist on the remote", async () => {
+  const { root, releaseCommit } = await createRepoFixture();
+
+  runGit(["tag", "demo-pkg@1.1.0", releaseCommit], root);
+  runGit(["push", "origin", "refs/tags/demo-pkg@1.1.0"], root);
+
+  assert.deepEqual(listMissingReleaseTags(root), []);
+});
+
+test("listMissingReleaseTags surfaces remote failures", async () => {
+  const { root } = await createRepoFixture();
+
+  await assert.throws(
+    () => listMissingReleaseTags(root, "missing-remote"),
+    /does not appear to be a git repository|No such remote/,
+  );
 });
 
 function runGit(args, cwd) {
