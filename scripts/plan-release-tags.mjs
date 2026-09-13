@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import semver from "semver";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -53,8 +54,10 @@ export function findReleaseCommit(
   root = path.resolve(__dirname, ".."),
 ) {
   const currentManifest = JSON.parse(readFileSync(path.join(root, packageJsonPath), "utf8"));
+  const currentVersion = semver.valid(currentManifest.version, { loose: true });
+  const targetVersion = semver.valid(packageVersion, { loose: true });
 
-  if (currentManifest.version !== packageVersion) {
+  if (!currentVersion || !targetVersion || !semver.eq(currentVersion, targetVersion)) {
     throw new Error(
       `Expected ${packageJsonPath} to currently contain version ${packageVersion}`,
     );
