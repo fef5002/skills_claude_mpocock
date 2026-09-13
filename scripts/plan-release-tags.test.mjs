@@ -44,6 +44,38 @@ test("collectReleasePackages finds package manifests and tags", async () => {
   ]);
 });
 
+test("collectReleasePackages includes nested manifests and ignores skipped directories", async () => {
+  const { root } = await createRepoFixture();
+  await mkdir(path.join(root, "packages", "nested"), { recursive: true });
+  await mkdir(path.join(root, "node_modules", "ignored"), { recursive: true });
+  await mkdir(path.join(root, ".changeset", "ignored"), { recursive: true });
+  await writeFile(
+    path.join(root, "packages", "nested", "package.json"),
+    JSON.stringify({ name: "nested-pkg", version: "2.0.0" }, null, 2) + "\n",
+  );
+  await writeFile(
+    path.join(root, "node_modules", "ignored", "package.json"),
+    JSON.stringify({ name: "ignored-node-modules", version: "9.9.9" }, null, 2) + "\n",
+  );
+  await writeFile(
+    path.join(root, ".changeset", "ignored", "package.json"),
+    JSON.stringify({ name: "ignored-changeset", version: "9.9.9" }, null, 2) + "\n",
+  );
+
+  assert.deepEqual(collectReleasePackages(root), [
+    {
+      tag: "demo-pkg@1.1.0",
+      packageJsonPath: "package.json",
+      version: "1.1.0",
+    },
+    {
+      tag: "nested-pkg@2.0.0",
+      packageJsonPath: "packages/nested/package.json",
+      version: "2.0.0",
+    },
+  ]);
+});
+
 test("findReleaseCommit returns the commit that introduced the current version", async () => {
   const { root, initialCommit, releaseCommit } = await createRepoFixture();
 

@@ -48,23 +48,35 @@ export function findReleaseCommit(
   packageVersion,
   root = path.resolve(__dirname, ".."),
 ) {
-  const packageJson = readFileSync(path.join(root, packageJsonPath), "utf8");
-  const versionLinePattern = new RegExp(
-    `^\\s*"version":\\s*"${escapeRegExp(packageVersion)}"\\s*,?\\s*$`,
-  );
-  const versionLine = packageJson.split("\n").findIndex((line) => versionLinePattern.test(line));
+  const currentManifest = JSON.parse(readFileSync(path.join(root, packageJsonPath), "utf8"));
 
-  if (versionLine === -1) {
+  if (currentManifest.version !== packageVersion) {
     throw new Error(
-      `Could not find version ${packageVersion} in ${packageJsonPath}`,
+      `Expected ${packageJsonPath} to currently contain version ${packageVersion}`,
     );
   }
 
-  const result = runGit(
-    ["blame", "--porcelain", "-L", `${versionLine + 1},${versionLine + 1}`, "--", packageJsonPath],
-    root,
-  );
-  const releaseCommit = result.stdout.split("\n")[0].trim().split(" ")[0];
+  const commits = runGit(["log", "--format=%H", "--", packageJsonPath], root)
+    .stdout
+    .trim()
+    .split("\n")
+    .filter(Boolean);
+  let releaseCommit = "";
+
+  for (const commit of commits) {
+    const manifestAtCommit = JSON.parse(
+      runGit(["show", `${commit}:${packageJsonPath}`], root).stdout,
+    );
+
+    if (manifestAtCommit.version === packageVersion) {
+      releaseCommit = commit;
+      continue;
+    }
+
+    if (releaseCommit) {
+      break;
+    }
+  }
 
   if (!releaseCommit) {
     throw new Error(
@@ -97,10 +109,6 @@ export function listMissingReleaseTags(
       },
     ];
   });
-}
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function runGit(args, cwd, { allowFailure = false } = {}) {

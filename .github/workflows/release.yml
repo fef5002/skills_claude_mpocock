@@ -35,28 +35,30 @@ jobs:
 
       - name: Update release branch or tags
         run: |
-          npm run version
-
-          if ! git diff --quiet; then
-            release_patch=/tmp/changeset-release.patch
-            git diff --binary > "${release_patch}"
-
+          if find .changeset -maxdepth 1 -name "*.md" ! -name "README.md" -print -quit | grep -q .; then
             if git fetch origin changeset-release/main:refs/remotes/origin/changeset-release/main 2>/dev/null; then
               release_branch_sha="$(git rev-parse refs/remotes/origin/changeset-release/main)"
               git checkout -B changeset-release/main refs/remotes/origin/changeset-release/main
-              git reset --hard "${GITHUB_SHA}"
+              git merge --no-edit "${GITHUB_SHA}"
             else
               release_branch_sha=""
               git checkout -B changeset-release/main
             fi
 
-            git apply --index "${release_patch}"
+            npm run version
+
+            if git diff --quiet; then
+              echo "No release changes to commit."
+              exit 0
+            fi
+
+            git add .
             git commit -m "chore: version skills"
 
             if [ -n "${release_branch_sha}" ]; then
               git push origin HEAD:changeset-release/main --force-with-lease=changeset-release/main:"${release_branch_sha}"
             else
-              git push origin HEAD:changeset-release/main --force-with-lease
+              git push origin HEAD:changeset-release/main
             fi
 
             echo "Updated changeset-release/main. Open or update the release PR manually."
