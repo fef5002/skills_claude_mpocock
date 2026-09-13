@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -54,9 +54,11 @@ test("collectReleasePackages finds package manifests and tags", async () => {
 
 test("collectReleasePackages includes nested manifests and ignores skipped directories", async () => {
   const { root } = await createRepoFixture();
+  const outsideRoot = await mkdtemp(path.join(os.tmpdir(), "plan-release-tags-outside-"));
   await mkdir(path.join(root, "packages", "nested"), { recursive: true });
   await mkdir(path.join(root, "node_modules", "ignored"), { recursive: true });
   await mkdir(path.join(root, ".changeset", "ignored"), { recursive: true });
+  await mkdir(path.join(outsideRoot, "external"), { recursive: true });
   await writeFile(
     path.join(root, "packages", "nested", "package.json"),
     JSON.stringify({ name: "nested-pkg", version: "2.0.0" }, null, 2) + "\n",
@@ -69,6 +71,11 @@ test("collectReleasePackages includes nested manifests and ignores skipped direc
     path.join(root, ".changeset", "ignored", "package.json"),
     JSON.stringify({ name: "ignored-changeset", version: "9.9.9" }, null, 2) + "\n",
   );
+  await writeFile(
+    path.join(outsideRoot, "external", "package.json"),
+    JSON.stringify({ name: "outside-pkg", version: "3.0.0" }, null, 2) + "\n",
+  );
+  await symlink(path.join(outsideRoot, "external"), path.join(root, "packages", "outside-link"));
 
   assert.deepEqual(collectReleasePackages(root), [
     {

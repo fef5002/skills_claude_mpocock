@@ -79,6 +79,10 @@ jobs:
               continue
             fi
 
+            if git rev-parse -q --verify "refs/tags/${release_tag}" >/dev/null 2>&1; then
+              git tag -d "${release_tag}"
+            fi
+
             git tag "${release_tag}" "${release_commit}"
             git push origin "refs/tags/${release_tag}"
           done <<< "${release_tags}"

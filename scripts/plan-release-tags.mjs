@@ -15,6 +15,10 @@ export function collectReleasePackages(root = path.resolve(__dirname, "..")) {
         continue;
       }
 
+      if (entry.isSymbolicLink()) {
+        continue;
+      }
+
       const entryPath = path.join(directory, entry.name);
 
       if (entry.isDirectory()) {
