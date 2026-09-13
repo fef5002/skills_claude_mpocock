@@ -63,80 +63,15 @@ jobs:
             exit 0
           fi
 
-          release_packages="$(node <<'NODE'
-          const fs = require("fs");
-          const path = require("path");
+          release_tags="$(node ./scripts/plan-release-tags.mjs)"
 
-          const ignoredDirectories = new Set([".git", ".changeset", "node_modules"]);
-          const packages = [];
-
-          function walk(directory) {
-            for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-              if (ignoredDirectories.has(entry.name)) {
-                continue;
-              }
-
-              const entryPath = path.join(directory, entry.name);
-
-              if (entry.isDirectory()) {
-                walk(entryPath);
-                continue;
-              }
-
-              if (entry.name !== "package.json") {
-                continue;
-              }
-
-              const pkg = JSON.parse(fs.readFileSync(entryPath, "utf8"));
-
-              if (pkg.name && pkg.version) {
-                packages.push([
-                  `${pkg.name}@${pkg.version}`,
-                  path.relative(process.cwd(), entryPath),
-                  pkg.version,
-                ].join("\t"));
-              }
-            }
-          }
-
-          walk(process.cwd());
-          console.log(packages.join("\n"));
-          NODE
-          )"
-
-          missing_release_tags=0
-          missing_release_tag_args=()
-          missing_release_tag_targets=()
-          while IFS=$'\t' read -r release_tag package_json_path package_version; do
-            if [ -z "${release_tag}" ]; then
-              continue
-            fi
-
-            if ! git ls-remote --exit-code --tags origin "refs/tags/${release_tag}" >/dev/null 2>&1; then
-              release_commit="$(git log -G "\"version\": \"${package_version}\"" -n 1 --format=%H -- "${package_json_path}")"
-
-              missing_release_tags=1
-              missing_release_tag_args+=("refs/tags/${release_tag}")
-              missing_release_tag_targets+=("${release_tag}:${release_commit}")
-              echo "Missing release tag ${release_tag}"
-            fi
-          done <<< "${release_packages}"
-
-          if [ "${missing_release_tags}" -eq 0 ]; then
+          if [ -z "${release_tags}" ]; then
             echo "All release tags already exist. Nothing to do."
             exit 0
           fi
 
-          for tag_target in "${missing_release_tag_targets[@]}"; do
-            release_tag="${tag_target%%:*}"
-            release_commit="${tag_target#*:}"
-
-            if [ -z "${release_commit}" ]; then
-              echo "Could not determine the release commit for ${release_tag}" >&2
-              exit 1
-            fi
-
+          while IFS=$'\t' read -r release_tag release_commit; do
+            echo "Missing release tag ${release_tag}"
             git tag "${release_tag}" "${release_commit}"
-          done
-
-          git push origin "${missing_release_tag_args[@]}"
+            git push origin "refs/tags/${release_tag}"
+          done <<< "${release_tags}"

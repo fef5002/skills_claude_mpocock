@@ -10,7 +10,7 @@
   "license": "MIT",
   "scripts": {
     "changeset": "changeset",
-    "test": "node --test ./scripts/sync-plugin-version.test.mjs",
+    "test": "node --test ./scripts/*.test.mjs",
     "version": "changeset version && node ./scripts/sync-plugin-version.mjs"
   },
   "devDependencies": {
