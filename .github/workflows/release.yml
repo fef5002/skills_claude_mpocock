@@ -38,18 +38,82 @@ jobs:
           npm run version
 
           if ! git diff --quiet; then
-            git checkout -B changeset-release/main
-            git add .
+            release_patch=/tmp/changeset-release.patch
+            git diff --binary > "${release_patch}"
+
+            if git fetch origin changeset-release/main:refs/remotes/origin/changeset-release/main 2>/dev/null; then
+              release_branch_sha="$(git rev-parse refs/remotes/origin/changeset-release/main)"
+              git checkout -B changeset-release/main refs/remotes/origin/changeset-release/main
+              git reset --hard "${GITHUB_SHA}"
+            else
+              release_branch_sha=""
+              git checkout -B changeset-release/main
+            fi
+
+            git apply --index "${release_patch}"
             git commit -m "chore: version skills"
-            git push origin HEAD:changeset-release/main --force
+
+            if [ -n "${release_branch_sha}" ]; then
+              git push origin HEAD:changeset-release/main --force-with-lease=changeset-release/main:"${release_branch_sha}"
+            else
+              git push origin HEAD:changeset-release/main --force-with-lease
+            fi
+
             echo "Updated changeset-release/main. Open or update the release PR manually."
             exit 0
           fi
 
-          release_tag="$(node -p 'const pkg = require("./package.json"); pkg.name + "@" + pkg.version')"
+          release_tags="$(node <<'NODE'
+          const fs = require("fs");
+          const path = require("path");
 
-          if git ls-remote --exit-code --tags origin "refs/tags/${release_tag}" >/dev/null 2>&1; then
-            echo "Release tag ${release_tag} already exists. Nothing to do."
+          const ignoredDirectories = new Set([".git", ".changeset", "node_modules"]);
+          const tags = [];
+
+          function walk(directory) {
+            for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+              if (ignoredDirectories.has(entry.name)) {
+                continue;
+              }
+
+              const entryPath = path.join(directory, entry.name);
+
+              if (entry.isDirectory()) {
+                walk(entryPath);
+                continue;
+              }
+
+              if (entry.name !== "package.json") {
+                continue;
+              }
+
+              const pkg = JSON.parse(fs.readFileSync(entryPath, "utf8"));
+
+              if (pkg.name && pkg.version) {
+                tags.push(`${pkg.name}@${pkg.version}`);
+              }
+            }
+          }
+
+          walk(process.cwd());
+          console.log(tags.join("\n"));
+          NODE
+          )"
+
+          missing_release_tags=0
+          while IFS= read -r release_tag; do
+            if [ -z "${release_tag}" ]; then
+              continue
+            fi
+
+            if ! git ls-remote --exit-code --tags origin "refs/tags/${release_tag}" >/dev/null 2>&1; then
+              missing_release_tags=1
+              echo "Missing release tag ${release_tag}"
+            fi
+          done <<< "${release_tags}"
+
+          if [ "${missing_release_tags}" -eq 0 ]; then
+            echo "All release tags already exist. Nothing to do."
             exit 0
           fi
 
