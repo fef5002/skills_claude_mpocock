@@ -95,23 +95,31 @@ export function listMissingReleaseTags(
   root = path.resolve(__dirname, ".."),
   remote = "origin",
 ) {
-  return collectReleasePackages(root).flatMap((pkg) => {
-    const remoteTag = runGit(
-      ["ls-remote", "--exit-code", "--tags", remote, `refs/tags/${pkg.tag}`],
-      root,
-      { allowFailure: true },
+  const remoteTagsResult = runGit(["ls-remote", "--tags", remote], root, {
+    allowFailure: true,
+  });
+
+  if (remoteTagsResult.status !== 0) {
+    throw new Error(
+      remoteTagsResult.stderr.trim() ||
+        remoteTagsResult.stdout.trim() ||
+        `git ls-remote failed for ${remote}`,
     );
+  }
 
-    if (remoteTag.status === 0) {
+  const existingRemoteTags = new Set(
+    remoteTagsResult.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => line.split("\t")[1]?.replace(/^refs\/tags\//, ""))
+      .map((tag) => tag?.replace(/\^\{\}$/, ""))
+      .filter(Boolean),
+  );
+
+  return collectReleasePackages(root).flatMap((pkg) => {
+    if (existingRemoteTags.has(pkg.tag)) {
       return [];
-    }
-
-    if (remoteTag.status !== 2) {
-      throw new Error(
-        remoteTag.stderr.trim() ||
-          remoteTag.stdout.trim() ||
-          `git ls-remote failed for refs/tags/${pkg.tag}`,
-      );
     }
 
     return [

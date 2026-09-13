@@ -48,6 +48,13 @@ jobs:
 
             if git diff --quiet; then
               echo "No release changes to commit."
+
+              if [ -n "${release_branch_sha}" ]; then
+                git push origin HEAD:changeset-release/main --force-with-lease=changeset-release/main:"${release_branch_sha}"
+              else
+                git push origin HEAD:changeset-release/main
+              fi
+
               exit 0
             fi
 
