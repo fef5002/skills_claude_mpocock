@@ -54,8 +54,8 @@ export function findReleaseCommit(
   root = path.resolve(__dirname, ".."),
 ) {
   const currentManifest = JSON.parse(readFileSync(path.join(root, packageJsonPath), "utf8"));
-  const currentVersion = semver.valid(currentManifest.version, { loose: true });
-  const targetVersion = semver.valid(packageVersion, { loose: true });
+  const currentVersion = semver.valid(currentManifest.version);
+  const targetVersion = semver.valid(packageVersion);
 
   if (!currentVersion || !targetVersion || !semver.eq(currentVersion, targetVersion)) {
     throw new Error(
